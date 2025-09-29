@@ -325,7 +325,7 @@ if st.button("Finalizar e Gerar Download", type="primary"):
         processed_data = output.getvalue()
         
         st.download_button(
-            label="Baixar respostas completas (Excel)",
+            label="Download (Excel)",
             data=processed_data,
             file_name=f"lifenergy_respostas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
