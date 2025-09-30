@@ -1,4 +1,4 @@
-# app_lifenergy_v17.py
+# app_lifenergy_v18.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -273,19 +273,32 @@ if st.button("Finalizar e Gerar Download", type="primary"):
                 return (6 - row["Resposta"]) if row["Reverso"] == "SIM" else row["Resposta"]
             dfr_numerico["Pontuação"] = dfr_numerico.apply(ajustar_reverso, axis=1)
             media_geral = dfr_numerico["Pontuação"].mean()
+            
+            # ##### ADICIONADO: Cálculo das médias por bloco para o gráfico #####
+            resumo_blocos = dfr_numerico.groupby("Bloco")["Pontuação"].mean().round(2).reset_index(name="Média").sort_values("Média")
+
         else:
             media_geral = 0
+            resumo_blocos = pd.DataFrame(columns=["Bloco", "Média"]) # Cria dataframe vazio se não houver respostas
 
         st.metric("Pontuação Média Geral (somente itens de 1 a 5)", f"{media_geral:.2f}")
-
-        # --- LÓGICA DE EXPORTAÇÃO (MODIFICADA) ---
         
-        # 1. Preparar DataFrame de respostas sem a média em cada linha
+        # ##### ADICIONADO: Exibição da tabela e do gráfico de barras #####
+        if not resumo_blocos.empty:
+            st.subheader("Média por Dimensão")
+            st.dataframe(resumo_blocos.rename(columns={"Bloco": "Dimensão"}), use_container_width=True, hide_index=True)
+            
+            st.subheader("Gráfico Comparativo por Dimensão")
+            st.bar_chart(resumo_blocos.set_index("Bloco")["Média"])
+
+
+        # --- LÓGICA DE EXPORTAÇÃO ---
+        st.subheader("Exportar Dados")
+        
         dfr_respostas = dfr[['Bloco', 'Item', 'Resposta']].copy()
         dfr_respostas = dfr_respostas.rename(columns={"Bloco": "Dimensão"})
         dfr_respostas['Resposta'] = dfr_respostas['Resposta'].fillna('N/A')
         
-        # 2. Preparar DataFrame de cabeçalho
         timestamp_str = datetime.now().isoformat(timespec="seconds")
         dados_cabecalho = {
             'Campo': ["Timestamp", "Empresa", "Cargo/Setor", "Instituição Coletora"],
@@ -293,13 +306,11 @@ if st.button("Finalizar e Gerar Download", type="primary"):
         }
         df_cabecalho = pd.DataFrame(dados_cabecalho)
 
-        # 3. Preparar DataFrame de observações
         dados_obs = {
             "Timestamp": [timestamp_str], "Empresa": [empresa], "Cargo/Setor": [cargo_setor], "Observações": [observacoes]
         }
         dfr_observacoes = pd.DataFrame(dados_obs)
-
-        # 4. Preparar DataFrame para a linha final da média
+        
         dados_media = {
             'Dimensão': ['PONTUAÇÃO MÉDIA GERAL'],
             'Item': [''],
@@ -307,25 +318,18 @@ if st.button("Finalizar e Gerar Download", type="primary"):
         }
         df_media = pd.DataFrame(dados_media)
         
-        # 5. Criar o arquivo Excel em memória
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Escrever na aba "Respostas"
             df_cabecalho.to_excel(writer, sheet_name='Respostas', index=False, header=False, startrow=0)
             dfr_respostas.to_excel(writer, sheet_name='Respostas', index=False, startrow=4)
-            
-            # Adicionar a média ao final da tabela
-            # Posição de início = 4 (offset do cabeçalho) + 1 (cabeçalho da tabela) + número de linhas de dados + 1 (linha em branco)
             start_row_media = 4 + 1 + len(dfr_respostas) + 1
             df_media.to_excel(writer, sheet_name='Respostas', index=False, header=False, startrow=start_row_media)
-            
-            # Escrever na aba "Observacoes"
             dfr_observacoes.to_excel(writer, sheet_name='Observacoes', index=False)
         
         processed_data = output.getvalue()
         
         st.download_button(
-            label="Download (Excel)",
+            label="Baixar respostas completas (Excel)",
             data=processed_data,
             file_name=f"lifenergy_respostas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
