@@ -1,8 +1,9 @@
-# app_lifenergy_v18.py
+# app_lifenergy_esg_nr1_final.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import io
+import gspread
+from gspread_dataframe import set_with_dataframe
 
 # --- PALETA DE CORES E CONFIGURAÇÃO DA PÁGINA ---
 COLOR_PRIMARY = "#70D1C6"
@@ -98,6 +99,28 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
+try:
+    # Cria uma cópia editável das credenciais
+    creds_dict = dict(st.secrets["google_credentials"])
+    # Corrige a formatação da chave privada
+    creds_dict['private_key'] = creds_dict['private_key'].replace('\\n', '\n')
+    
+    # Autentica no Google
+    gc = gspread.service_account_from_dict(creds_dict)
+    
+    # Abre a planilha pelo nome exato
+    spreadsheet = gc.open("Respostas Formularios")
+    
+    # Seleciona a primeira aba
+    worksheet = spreadsheet.sheet1
+
+except Exception as e:
+    st.error(f"Erro ao conectar com o Google Sheets: {e}")
+    st.stop()
+
+# Seleciona as abas fora da função de cache
+ws_respostas = spreadsheet.worksheet("Organizacional")
+
 
 # --- CABEÇALHO DA APLICAÇÃO ---
 col1, col2 = st.columns([1, 3])
@@ -118,11 +141,12 @@ with col2:
 # --- SEÇÃO DE IDENTIFICAÇÃO ---
 with st.container(border=True):
     st.markdown("<h3 style='text-align: center;'>Identificação Mínima</h3>", unsafe_allow_html=True)
-    
-    empresa = st.text_input("Empresa")
-    cargo_setor = st.text_input("Cargo/Setor")
-    instituicao_coletora = st.text_input("Instituição Coletora", "Instituto Wedja de Socionomia SS Ltda", disabled=True)
-
+    col1_form, col2_form = st.columns(2)
+    with col1_form:
+        respondente = st.text_input("Respondente:", key="input_respondente")
+        data = st.text_input("Data:", datetime.now().strftime('%d/%m/%Y'))
+    with col2_form:
+        organizacao_coletora = st.text_input("Organização Coletora:", "Instituto Wedja de Socionomia", disabled=True)
 # --- INSTRUÇÕES ---
 with st.expander("Ver Orientações aos Respondentes", expanded=True):
     st.info(
@@ -244,8 +268,6 @@ for bloco in blocos:
                 on_change=registrar_resposta, args=(item_id, widget_key)
             )
 
-# --- CAMPO DE OBSERVAÇÕES E BOTÃO DE FINALIZAR ---
-observacoes = st.text_area("Observações (opcional):")
 
 if st.button("Finalizar e Gerar Download", type="primary"):
     if not st.session_state.respostas:
@@ -291,47 +313,29 @@ if st.button("Finalizar e Gerar Download", type="primary"):
             st.subheader("Gráfico Comparativo por Dimensão")
             st.bar_chart(resumo_blocos.set_index("Bloco")["Média"])
 
+        # --- LÓGICA DE ENVIO PARA GOOGLE SHEETS ---
+        with st.spinner("Enviando dados para a planilha..."):
+            try:
+                # 1. Preparar dados das respostas
+                timestamp_str = datetime.now().isoformat(timespec="seconds")
+                respostas_para_enviar = []
+                for _, row in dfr.iterrows():
+                    respostas_para_enviar.append([
+                        timestamp_str,
+                        respondente,
+                        data,
+                        organizacao_coletora,
+                        row["Dimensão"],
+                        row["Subcategoria"],
+                        row["Item"],
+                        row["Resposta"] if pd.notna(row["Resposta"]) else "N/A"
+                    ])
+                
+                ws_respostas.append_rows(respostas_para_enviar, value_input_option='USER_ENTERED')
 
-        # --- LÓGICA DE EXPORTAÇÃO ---
-        st.subheader("Exportar Dados")
         
-        dfr_respostas = dfr[['Bloco', 'Item', 'Resposta']].copy()
-        dfr_respostas = dfr_respostas.rename(columns={"Bloco": "Dimensão"})
-        dfr_respostas['Resposta'] = dfr_respostas['Resposta'].fillna('N/A')
-        
-        timestamp_str = datetime.now().isoformat(timespec="seconds")
-        dados_cabecalho = {
-            'Campo': ["Timestamp", "Empresa", "Cargo/Setor", "Instituição Coletora"],
-            'Valor': [timestamp_str, empresa, cargo_setor, instituicao_coletora]
-        }
-        df_cabecalho = pd.DataFrame(dados_cabecalho)
-
-        dados_obs = {
-            "Timestamp": [timestamp_str], "Empresa": [empresa], "Cargo/Setor": [cargo_setor], "Observações": [observacoes]
-        }
-        dfr_observacoes = pd.DataFrame(dados_obs)
-        
-        dados_media = {
-            'Dimensão': ['PONTUAÇÃO MÉDIA GERAL'],
-            'Item': [''],
-            'Resposta': [f"{media_geral:.2f}"]
-        }
-        df_media = pd.DataFrame(dados_media)
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_cabecalho.to_excel(writer, sheet_name='Respostas', index=False, header=False, startrow=0)
-            dfr_respostas.to_excel(writer, sheet_name='Respostas', index=False, startrow=4)
-            start_row_media = 4 + 1 + len(dfr_respostas) + 1
-            df_media.to_excel(writer, sheet_name='Respostas', index=False, header=False, startrow=start_row_media)
-            dfr_observacoes.to_excel(writer, sheet_name='Observacoes', index=False)
-        
-        processed_data = output.getvalue()
-        
-        st.download_button(
-            label="Baixar respostas completas (Excel)",
-            data=processed_data,
-            file_name=f"lifenergy_respostas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        st.success("Arquivo pronto para download!")
+                st.success("Suas respostas foram enviadas com sucesso!")
+                st.info("Você já pode fechar esta janela.")
+                st.balloons()
+            except Exception as e:
+                st.error(f"Erro ao enviar dados para a planilha: {e}")
