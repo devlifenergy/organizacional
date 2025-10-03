@@ -314,11 +314,14 @@ if st.button("Finalizar e Gerar Download", type="primary"):
             st.bar_chart(resumo_blocos.set_index("Bloco")["Média"])
 
         # --- LÓGICA DE ENVIO PARA GOOGLE SHEETS ---
+        # --- LÓGICA DE ENVIO PARA GOOGLE SHEETS ---
         with st.spinner("Enviando dados para a planilha..."):
             try:
                 # 1. Preparar dados das respostas
                 timestamp_str = datetime.now().isoformat(timespec="seconds")
                 respostas_para_enviar = []
+                
+                # O DataFrame 'dfr' já contém as colunas 'Bloco', 'Item' e 'Resposta'
                 for _, row in dfr.iterrows():
                     respostas_para_enviar.append([
                         timestamp_str,
@@ -326,13 +329,12 @@ if st.button("Finalizar e Gerar Download", type="primary"):
                         data,
                         organizacao_coletora,
                         row["Bloco"],
-                        row["Subcategoria"],
                         row["Item"],
                         row["Resposta"] if pd.notna(row["Resposta"]) else "N/A"
                     ])
                 
+                # 2. Enviar para a aba "Organizacional"
                 ws_respostas.append_rows(respostas_para_enviar, value_input_option='USER_ENTERED')
-
         
                 st.success("Suas respostas foram enviadas com sucesso!")
                 st.info("Você já pode fechar esta janela.")
