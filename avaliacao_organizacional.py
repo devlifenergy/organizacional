@@ -256,7 +256,7 @@ def registrar_resposta(item_id, key):
 
 for bloco in blocos:
     expandido = "Reversos" in bloco
-    with st.expander(f"Dimensão: {bloco}", expanded=expandido):
+    with st.expander(f"{bloco}", expanded=expandido):
         df_bloco = df_itens[df_itens["Bloco"] == bloco]
         for _, row in df_bloco.iterrows():
             item_id = row["ID"]
@@ -325,7 +325,7 @@ if st.button("Finalizar e Gerar Download", type="primary"):
                         respondente,
                         data,
                         organizacao_coletora,
-                        row["Dimensão"],
+                        row["Bloco"],
                         row["Subcategoria"],
                         row["Item"],
                         row["Resposta"] if pd.notna(row["Resposta"]) else "N/A"
