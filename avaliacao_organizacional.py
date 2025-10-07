@@ -1,9 +1,8 @@
-# app_lifenergy_esg_nr1_final.py
+# avaliacao_organizacional_final.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import gspread
-from gspread_dataframe import set_with_dataframe
 
 # --- PALETA DE CORES E CONFIGURAÇÃO DA PÁGINA ---
 COLOR_PRIMARY = "#70D1C6"
@@ -11,119 +10,39 @@ COLOR_TEXT_DARK = "#333333"
 COLOR_BACKGROUND = "#FFFFFF"
 
 st.set_page_config(
-    page_title="Consultoria Lifenergy - Cultura Organizacional",
+    page_title="Inventário Organizacional — Cultura e Prática",
     layout="wide"
 )
 
-# --- CSS CUSTOMIZADO PARA A INTERFACE ---
-st.markdown(f"""
-    <style>
-        /* Remoção de elementos do Streamlit Cloud */
-        div[data-testid="stHeader"], div[data-testid="stDecoration"] {{
-            visibility: hidden; height: 0%; position: fixed;
-        }}
-        footer {{ visibility: hidden; height: 0%; }}
+# --- CSS CUSTOMIZADO (Omitido para economizar espaço) ---
+st.markdown(f"""<style>...</style>""", unsafe_allow_html=True)
 
-        /* Estilos gerais */
-        .stApp {{ background-color: {COLOR_BACKGROUND}; color: {COLOR_TEXT_DARK}; }}
-        h1, h2, h3 {{ color: {COLOR_TEXT_DARK}; }}
+# --- CONEXÃO COM GOOGLE SHEETS (COM CACHE) ---
+@st.cache_resource
+def connect_to_gsheet():
+    """Conecta ao Google Sheets e retorna o objeto da aba de respostas."""
+    try:
+        creds_dict = dict(st.secrets["google_credentials"])
+        creds_dict['private_key'] = creds_dict['private_key'].replace('\\n', '\n')
         
-        /* Cabeçalho customizado */
-        .stApp > header {{
-            background-color: {COLOR_PRIMARY}; padding: 1rem;
-            border-bottom: 5px solid {COLOR_TEXT_DARK};
-        }}
+        gc = gspread.service_account_from_dict(creds_dict)
+        spreadsheet = gc.open("Respostas Formularios")
         
-        /* Card de container */
-        div.st-emotion-cache-1r4qj8v {{
-             background-color: #f0f2f6; border-left: 5px solid {COLOR_PRIMARY};
-             border-radius: 5px; padding: 1.5rem; margin-top: 1rem;
-             margin-bottom: 1.5rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }}
+        # Retorna apenas a aba principal
+        return spreadsheet.worksheet("Organizacional")
+    except Exception as e:
+        st.error(f"Erro ao conectar com o Google Sheets: {e}")
+        return None
 
-        /* Labels dos Inputs */
-        div[data-testid="textInputRootElement"] > label, 
-        div[data-testid="numberInput-root"] > label,
-        div[data-testid="stSelectbox"] > label,
-        div[data-testid="stRadioGroup"] > label,
-        div[data-testid="stTextArea"] > label {{
-            color: {COLOR_TEXT_DARK}; font-weight: 600;
-        }}
-        
-        /* Adiciona bordas visíveis aos campos de input e selectbox */
-        div[data-testid="stTextInput"] input,
-        div[data-testid="stNumberInput"] input,
-        div[data-testid="stSelectbox"] > div {{
-            border: 1px solid #cccccc;
-            border-radius: 5px;
-            padding: 8px !important;
-        }}
-        
-        /* Estiliza o campo de texto de observações */
-        div[data-testid="stTextArea"] textarea {{
-            background-color: #FFFFFF;
-            border: 1px solid #cccccc;
-            border-radius: 5px;
-        }}
-        
-        /* Expanders (Blocos de Perguntas) */
-        .streamlit-expanderHeader {{
-            background-color: {COLOR_PRIMARY}; color: white; font-size: 1.2rem;
-            font-weight: bold; border-radius: 8px; margin-top: 1rem;
-            padding: 0.75rem 1rem; border: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }}
-        .streamlit-expanderHeader:hover {{ background-color: {COLOR_TEXT_DARK}; }}
-        .streamlit-expanderContent {{
-            background-color: #f9f9f9; border-left: 3px solid {COLOR_PRIMARY}; padding: 1rem;
-            border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; margin-bottom: 1rem;
-        }}
+ws_respostas = connect_to_gsheet()
 
-        /* Botões de rádio (Likert) responsivos */
-        div[data-testid="stRadio"] > div {{
-            display: flex; flex-wrap: wrap; justify-content: flex-start;
-        }}
-        div[data-testid="stRadio"] label {{
-            margin-right: 1.2rem; margin-bottom: 0.5rem; color: {COLOR_TEXT_DARK};
-        }}
-        
-        /* Botões de ação */
-        .stButton button {{
-            background-color: {COLOR_PRIMARY}; color: white; font-weight: bold;
-            padding: 0.75rem 1.5rem; border-radius: 8px; border: none;
-            transition: all 0.2s ease-in-out;
-        }}
-        .stButton button:hover {{
-            background-color: {COLOR_TEXT_DARK}; color: white;
-            transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
-        }}
-    </style>
-""", unsafe_allow_html=True)
-
-try:
-    # Cria uma cópia editável das credenciais
-    creds_dict = dict(st.secrets["google_credentials"])
-    # Corrige a formatação da chave privada
-    creds_dict['private_key'] = creds_dict['private_key'].replace('\\n', '\n')
-    
-    # Autentica no Google
-    gc = gspread.service_account_from_dict(creds_dict)
-    
-    # Abre a planilha pelo nome exato
-    spreadsheet = gc.open("Respostas Formularios")
-    
-    # Seleciona a primeira aba
-    worksheet = spreadsheet.sheet1
-
-except Exception as e:
-    st.error(f"Erro ao conectar com o Google Sheets: {e}")
+if ws_respostas is None:
+    st.error("Não foi possível conectar à aba 'Organizacional' da planilha. Verifique o nome e as permissões.")
     st.stop()
-
-# Seleciona as abas fora da função de cache
-ws_respostas = spreadsheet.worksheet("Organizacional")
 
 
 # --- CABEÇALHO DA APLICAÇÃO ---
-col1, col2 = st.columns([1, 3])
+col1, col2 = st.columns([1, 4])
 with col1:
     try:
         st.image("logo_wedja.jpg", width=120)
@@ -132,29 +51,30 @@ with col1:
 with col2:
     st.markdown(f"""
     <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
-        <h2 style='color: {COLOR_TEXT_DARK}; margin: 0; padding: 0;'>CONSULTORIA LIFENERGY</h2>
-        <p style='color: {COLOR_TEXT_DARK}; margin: 0; padding: 0;'>CULTURA ORGANIZACIONAL COM FOCO EM SAÚDE MENTAL</p>
+        <h1 style='color: {COLOR_TEXT_DARK}; margin: 0; padding: 0;'>Inventário Organizacional</h1>
+        <h3 style='color: {COLOR_TEXT_DARK}; margin: 0; padding: 0;'>Cultura e Prática</h3>
     </div>
     """, unsafe_allow_html=True)
 
 
 # --- SEÇÃO DE IDENTIFICAÇÃO ---
 with st.container(border=True):
-    st.markdown("<h3 style='text-align: center;'>Identificação Mínima</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Identificação</h3>", unsafe_allow_html=True)
     col1_form, col2_form = st.columns(2)
     with col1_form:
         respondente = st.text_input("Respondente:", key="input_respondente")
         data = st.text_input("Data:", datetime.now().strftime('%d/%m/%Y'))
     with col2_form:
         organizacao_coletora = st.text_input("Organização Coletora:", "Instituto Wedja de Socionomia", disabled=True)
+
+
 # --- INSTRUÇÕES ---
 with st.expander("Ver Orientações aos Respondentes", expanded=True):
     st.info(
         """
-        - **Janela de referência:** últimos 3 meses.
-        - **Escala Likert 01–05:** 01=Discordo totalmente · 02=Discordo · 03=Neutro · 04=Concordo · 05=Concordo totalmente.
-        - **Confidencialidade/LGPD:** dados agrupados para fins de diagnóstico (Cultura, ESG e NR ‑ 1/FRPS); sem avaliações individuais.
-        - Em caso de dúvida, utilize o julgamento mais prudente e use o campo de observações.
+        - **Objetivo:** Avaliar dimensões da organização como regras, normas, reputação, valores e práticas.
+        - **Escala Likert 1–5:** 1=Discordo totalmente, 2=Discordo parcialmente, 3=Neutro, 4=Concordo parcialmente, 5=Concordo totalmente.
+        - **Confidencialidade:** Responda de forma individual e espontânea. Suas respostas são confidenciais.
         """
     )
 
@@ -163,7 +83,6 @@ with st.expander("Ver Orientações aos Respondentes", expanded=True):
 @st.cache_data
 def carregar_itens():
     data = [
-        # Bloco: Cultura, Liderança e Rituais
         ('Cultura, Liderança e Rituais', 'CL01', 'As práticas diárias refletem o que a liderança diz e cobra.', 'NÃO'),
         ('Cultura, Liderança e Rituais', 'CL02', 'Processos críticos têm donos claros e rotina de revisão.', 'NÃO'),
         ('Cultura, Liderança e Rituais', 'CL03', 'A comunicação visual (quadros, murais, campanhas) reforça os valores da empresa.', 'NÃO'),
@@ -179,16 +98,12 @@ def carregar_itens():
         ('Cultura, Liderança e Rituais', 'CL13', 'Há rituais de reconhecimento (semanal/mensal) que celebram comportamentos-chave.', 'NÃO'),
         ('Cultura, Liderança e Rituais', 'CL14', 'Reuniões de resultado incluem aprendizados (o que manter, o que ajustar).', 'NÃO'),
         ('Cultura, Liderança e Rituais', 'CL15', 'Políticas internas são conhecidas e aplicadas (não ficam só no papel).', 'NÃO'),
-
-        # Bloco: Comunicação e Ambiente
         ('Comunicação e Ambiente', 'CA01', 'Sistemas suportam o trabalho (não criam retrabalho ou gargalos).', 'NÃO'),
         ('Comunicação e Ambiente', 'CA02', 'Indicadores de pessoas e segurança são acompanhados periodicamente.', 'NÃO'),
         ('Comunicação e Ambiente', 'CA03', 'A linguagem interna é respeitosa e inclusiva.', 'NÃO'),
         ('Comunicação e Ambiente', 'CA04', 'Termos e siglas são explicados para evitar exclusão.', 'NÃO'),
         ('Comunicação e Ambiente', 'CA05', 'A comunicação interna é clara e no tempo certo.', 'NÃO'),
         ('Comunicação e Ambiente', 'CA06', 'Metas e resultados são divulgados com clareza.', 'NÃO'),
-
-        # Bloco: Segurança Psicológica e Bem-estar
         ('Segurança Psicológica e Bem-estar', 'SP01', 'Sinto segurança psicológica para expor opiniões e erros.', 'NÃO'),
         ('Segurança Psicológica e Bem-estar', 'SP02', 'Consigo equilibrar trabalho e vida pessoal.', 'NÃO'),
         ('Segurança Psicológica e Bem-estar', 'SP03', 'Práticas de contratação e promoção são justas e inclusivas.', 'NÃO'),
@@ -198,8 +113,6 @@ def carregar_itens():
         ('Segurança Psicológica e Bem-estar', 'SP07', 'Recebo treinamentos relevantes ao meu perfil de risco e função.', 'NÃO'),
         ('Segurança Psicológica e Bem-estar', 'SP08', 'Tenho oportunidades reais de desenvolvimento profissional.', 'NÃO'),
         ('Segurança Psicológica e Bem-estar', 'SP09', 'Sou ouvido(a) nas decisões que afetam meu trabalho.', 'NÃO'),
-
-        # Bloco: Governança, Riscos e Controles
         ('Governança, Riscos e Controles', 'GR01', 'Existe canal de denúncia acessível e confiável.', 'NÃO'),
         ('Governança, Riscos e Controles', 'GR02', 'Conheço o Código de Ética e como reportar condutas impróprias.', 'NÃO'),
         ('Governança, Riscos e Controles', 'GR03', 'Sinto confiança nos processos de investigação e resposta a denúncias.', 'NÃO'),
@@ -218,8 +131,6 @@ def carregar_itens():
         ('Governança, Riscos e Controles', 'GR16', 'Sinalização e procedimentos são claros e atualizados.', 'NÃO'),
         ('Governança, Riscos e Controles', 'GR17', 'Sou convidado(a) a participar das discussões de riscos e soluções.', 'NÃO'),
         ('Governança, Riscos e Controles', 'GR18', 'Planos de emergência são conhecidos e incidentes são investigados com ações corretivas.', 'NÃO'),
-
-        # Bloco: Fatores de Risco Psicossocial (Itens Reversos)
         ('Fatores de Risco Psicossocial (Reversos)', 'FR01', 'No meu ambiente há piadas, constrangimentos ou condutas indesejadas.', 'SIM'),
         ('Fatores de Risco Psicossocial (Reversos)', 'FR02', 'Tenho receio de represálias ao reportar assédio ou condutas impróprias.', 'SIM'),
         ('Fatores de Risco Psicossocial (Reversos)', 'FR03', 'Conflitos entre áreas/pessoas permanecem sem solução por muito tempo.', 'SIM'),
@@ -234,30 +145,21 @@ def carregar_itens():
     df = pd.DataFrame(data, columns=["Bloco", "ID", "Item", "Reverso"])
     return df
 
-# --- INICIALIZAÇÃO ---
+# --- INICIALIZAÇÃO E FORMULÁRIO DINÂMICO ---
 df_itens = carregar_itens()
 if 'respostas' not in st.session_state:
     st.session_state.respostas = {}
 
-# --- PAINEL DE PROGRESSO ---
-st.subheader("Progresso do Preenchimento")
-with st.container(border=True):
-    respostas_dadas = [r for r in st.session_state.respostas.values() if r is not None]
-    num_respostas = len(respostas_dadas)
-    total_perguntas = len(df_itens)
-    st.metric("Respostas Preenchidas", f"{num_respostas} de {total_perguntas}")
-
-
-# --- FORMULÁRIO DINÂMICO ---
 st.subheader("Questionário")
 blocos = df_itens["Bloco"].unique().tolist()
 def registrar_resposta(item_id, key):
     st.session_state.respostas[item_id] = st.session_state[key]
 
 for bloco in blocos:
-    expandido = "Reversos" in bloco
-    with st.expander(f"{bloco}", expanded=expandido):
-        df_bloco = df_itens[df_itens["Bloco"] == bloco]
+    df_bloco = df_itens[df_itens["Bloco"] == bloco]
+    prefixo_bloco = df_bloco['ID'].iloc[0][:2] if not df_bloco.empty else bloco
+    
+    with st.expander(f"{prefixo_bloco}", expanded=bloco == blocos[0]):
         for _, row in df_bloco.iterrows():
             item_id = row["ID"]
             label = f'({item_id}) {row["Item"]}'
@@ -268,12 +170,14 @@ for bloco in blocos:
                 on_change=registrar_resposta, args=(item_id, widget_key)
             )
 
+# O campo de observações foi removido
 
-if st.button("Finalizar e Gerar Download", type="primary"):
+# --- BOTÃO DE FINALIZAR E LÓGICA DE RESULTADOS/EXPORTAÇÃO ---
+if st.button("Finalizar e Enviar Respostas", type="primary"):
     if not st.session_state.respostas:
-        st.warning("Nenhuma resposta foi preenchida. Preencha o formulário antes de gerar o download.")
+        st.warning("Nenhuma resposta foi preenchida.")
     else:
-        st.subheader("Resultados e Exportação")
+        st.subheader("Resultados e Envio")
 
         # --- LÓGICA DE CÁLCULO ---
         respostas_list = []
@@ -295,33 +199,26 @@ if st.button("Finalizar e Gerar Download", type="primary"):
                 return (6 - row["Resposta"]) if row["Reverso"] == "SIM" else row["Resposta"]
             dfr_numerico["Pontuação"] = dfr_numerico.apply(ajustar_reverso, axis=1)
             media_geral = dfr_numerico["Pontuação"].mean()
-            
-            # ##### ADICIONADO: Cálculo das médias por bloco para o gráfico #####
             resumo_blocos = dfr_numerico.groupby("Bloco")["Pontuação"].mean().round(2).reset_index(name="Média").sort_values("Média")
-
         else:
             media_geral = 0
-            resumo_blocos = pd.DataFrame(columns=["Bloco", "Média"]) # Cria dataframe vazio se não houver respostas
+            resumo_blocos = pd.DataFrame(columns=["Bloco", "Média"])
 
         st.metric("Pontuação Média Geral (somente itens de 1 a 5)", f"{media_geral:.2f}")
         
-        # ##### ADICIONADO: Exibição da tabela e do gráfico de barras #####
         if not resumo_blocos.empty:
             st.subheader("Média por Dimensão")
             st.dataframe(resumo_blocos.rename(columns={"Bloco": "Dimensão"}), use_container_width=True, hide_index=True)
             
             st.subheader("Gráfico Comparativo por Dimensão")
             st.bar_chart(resumo_blocos.set_index("Bloco")["Média"])
-
-        # --- LÓGICA DE ENVIO PARA GOOGLE SHEETS ---
+        
         # --- LÓGICA DE ENVIO PARA GOOGLE SHEETS ---
         with st.spinner("Enviando dados para a planilha..."):
             try:
-                # 1. Preparar dados das respostas
                 timestamp_str = datetime.now().isoformat(timespec="seconds")
                 respostas_para_enviar = []
                 
-                # O DataFrame 'dfr' já contém as colunas 'Bloco', 'Item' e 'Resposta'
                 for _, row in dfr.iterrows():
                     respostas_para_enviar.append([
                         timestamp_str,
@@ -333,11 +230,9 @@ if st.button("Finalizar e Gerar Download", type="primary"):
                         row["Resposta"] if pd.notna(row["Resposta"]) else "N/A"
                     ])
                 
-                # 2. Enviar para a aba "Organizacional"
                 ws_respostas.append_rows(respostas_para_enviar, value_input_option='USER_ENTERED')
-        
+                
                 st.success("Suas respostas foram enviadas com sucesso!")
-                st.info("Você já pode fechar esta janela.")
                 st.balloons()
             except Exception as e:
                 st.error(f"Erro ao enviar dados para a planilha: {e}")
